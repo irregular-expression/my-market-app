@@ -12,6 +12,7 @@ import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.enums.ActionType;
 import ru.irrexp.practicum.mymarket.enums.SortType;
+import ru.irrexp.practicum.mymarket.exception.ItemNotFoundException;
 import ru.irrexp.practicum.mymarket.repository.CartItemRepository;
 import ru.irrexp.practicum.mymarket.repository.ItemRepository;
 
@@ -19,6 +20,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @SpringBootTest
 @Transactional
@@ -54,7 +56,8 @@ class ItemServiceTest {
 
         ItemsPageResponse response = itemService.getItems("Phone", SortType.PRICE, 1, 5);
         assertThat(response.items()).hasSize(2);
-        assertThat(response.items().get(0)).hasSize(3);
+        assertThat(response.items().getFirst()).hasSize(3);
+        assertThat(response.items().getFirst().getFirst().title()).isEqualTo("Phone 0");
         assertThat(response.paging().pageSize()).isEqualTo(5);
         assertThat(response.paging().pageNumber()).isEqualTo(1);
         assertThat(response.search()).isEqualTo("Phone");
@@ -98,7 +101,7 @@ class ItemServiceTest {
     @Test
     void getItem_throwsWhenNotFound() {
         assertThatThrownBy(() -> itemService.getItem(9999L))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ItemNotFoundException.class)
                 .hasMessageContaining("Товар не найден");
     }
 
@@ -132,6 +135,9 @@ class ItemServiceTest {
 
         dto = itemService.updateCartFromItemPage(item.getId(), ActionType.MINUS);
         assertThat(dto.count()).isEqualTo(0);
+
+        var deletedCartItem = cartItemRepository.findByItemId(item.getId());
+        assertFalse(deletedCartItem.isPresent());
     }
 
     @Test

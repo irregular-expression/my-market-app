@@ -22,11 +22,9 @@ public class CartController implements CartApi {
     }
 
     @Override
-    public String updateCartItem(long id, ActionType action, Model model) {
-        var dto = cartService.updateCartItem(id, action);
-        model.addAttribute("items", dto.items());
-        model.addAttribute("total", dto.total());
-        return "cart";
+    public String updateCartItem(long id, ActionType action) {
+        cartService.updateCartItem(id, action);
+        return "redirect:/cart";
     }
 }
 

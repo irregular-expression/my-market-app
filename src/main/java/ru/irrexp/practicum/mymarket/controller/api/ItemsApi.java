@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import ru.irrexp.practicum.mymarket.enums.ActionType;
 import ru.irrexp.practicum.mymarket.enums.SortType;
 
@@ -19,7 +20,8 @@ public interface ItemsApi {
             @RequestParam(defaultValue = "NO") SortType sort,
             @RequestParam(defaultValue = "1") int pageNumber,
             @RequestParam(defaultValue = "5") int pageSize,
-            @RequestParam ActionType action
+            @RequestParam ActionType action,
+            RedirectAttributes redirectAttributes
     );
 
     @GetMapping("/{id}")
@@ -29,7 +31,7 @@ public interface ItemsApi {
     String updateCartFromItemPage(
             @PathVariable long id,
             @RequestParam ActionType action,
-            Model model
+            RedirectAttributes redirectAttributes
     );
 
     @GetMapping

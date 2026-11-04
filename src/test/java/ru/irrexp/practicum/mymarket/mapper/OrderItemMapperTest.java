@@ -1,21 +1,15 @@
 package ru.irrexp.practicum.mymarket.mapper;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.entity.OrderItem;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@ActiveProfiles("test")
 class OrderItemMapperTest {
 
-    @Autowired
-    private OrderItemMapper orderItemMapper;
+    private final OrderItemMapper orderItemMapper = new OrderItemMapperImpl();
 
     @Test
     void toOrderItem_mapsPriceFromItemAndIgnoresIdAndOrder() {

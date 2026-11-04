@@ -8,6 +8,8 @@ import ru.irrexp.practicum.mymarket.dto.OrderDto;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Order;
 import ru.irrexp.practicum.mymarket.entity.OrderItem;
+import ru.irrexp.practicum.mymarket.exception.OrderNotFoundException;
+import ru.irrexp.practicum.mymarket.exception.UnavailableBuyOperationException;
 import ru.irrexp.practicum.mymarket.mapper.OrderItemMapper;
 import ru.irrexp.practicum.mymarket.mapper.OrderMapper;
 import ru.irrexp.practicum.mymarket.repository.CartItemRepository;
@@ -38,17 +40,18 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public OrderDetailResponse getOrder(long id, boolean newOrder) {
         Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Заказ не найден"));
+                .orElseThrow(() -> new OrderNotFoundException("Заказ не найден"));
         OrderDto orderDto = orderMapper.toDto(order);
         return new OrderDetailResponse(orderDto, newOrder);
     }
 
     @Override
+    @Transactional
     public long buy() {
         List<CartItem> cartItems = cartItemRepository.findAll();
 
         if (cartItems.isEmpty()) {
-            throw new IllegalStateException("Корзина пуста");
+            throw new UnavailableBuyOperationException("Корзина пуста");
         }
 
         Order order = new Order();

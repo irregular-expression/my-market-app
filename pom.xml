@@ -142,7 +142,7 @@
 					<user>practicum_user</user>
 					<password>mysecretpassword</password>
 					<locations>classpath:db/migration</locations>
-					<schemas>blog</schemas>
+					<schemas>market</schemas>
 					<baselineOnMigrate>true</baselineOnMigrate>
 				</configuration>
 			</plugin>

@@ -47,10 +47,8 @@ class CartControllerTest {
         mockMvc.perform(post("/cart/items")
                                 .param("id", "123")
                                 .param("action", "PLUS"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"))
-                .andExpect(model().attribute("items", mockResponse.items()))
-                .andExpect(model().attribute("total", mockResponse.total()));
+                .andExpect(status().is3xxRedirection())
+                .andExpect(view().name("redirect:/cart"));
     }
 }
 

@@ -1,21 +1,15 @@
 package ru.irrexp.practicum.mymarket.mapper;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import ru.irrexp.practicum.mymarket.dto.ItemDto;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@ActiveProfiles("test")
 class ItemMapperTest {
 
-    @Autowired
-    private ItemMapper itemMapper;
+    private final ItemMapper itemMapper = new ItemMapperImpl();
 
     @Test
     void toDto_mapsAllFieldsCorrectly() {
@@ -51,7 +45,7 @@ class ItemMapperTest {
 
         ItemDto dto = itemMapper.mapCartItemToItemDto(cartItem);
 
-        assertThat(dto.id()).isEqualTo(1L);
+        assertThat(dto.id()).isEqualTo(7L);
         assertThat(dto.title()).isEqualTo("From Cart");
         assertThat(dto.price()).isEqualTo(300L);
         assertThat(dto.count()).isEqualTo(2);

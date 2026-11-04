@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
@@ -36,6 +37,20 @@ class ItemsControllerTest {
 
     @MockitoBean
     private OrderService orderService;
+
+    @Test
+    void updateFromList_redirectsWithEncodedSearchParam() throws Exception {
+        mockMvc.perform(post("/items")
+                                .param("id", "1")
+                                .param("search", "Review&pear+test")
+                                .param("sort", "ALPHA")
+                                .param("pageNumber", "1")
+                                .param("pageSize", "10")
+                                .param("action", "MINUS"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/items?search=Review%26pear%2Btest&sort=ALPHA&pageNumber=1&pageSize=10"));
+    }
+
 
     @Test
     void listItems_returnsViewWithPagingAndSearch() throws Exception {
@@ -105,9 +120,7 @@ class ItemsControllerTest {
 
         mockMvc.perform(post("/items/2")
                                 .param("action", "PLUS"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attribute("item", mockDto));
+                .andExpect(status().is3xxRedirection());
     }
 
     @Test

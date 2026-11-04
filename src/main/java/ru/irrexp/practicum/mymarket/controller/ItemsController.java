@@ -3,7 +3,7 @@ package ru.irrexp.practicum.mymarket.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import ru.irrexp.practicum.mymarket.controller.api.ItemsApi;
 import ru.irrexp.practicum.mymarket.enums.ActionType;
 import ru.irrexp.practicum.mymarket.enums.SortType;
@@ -27,24 +27,22 @@ public class ItemsController implements ItemsApi {
 
     @Override
     public String updateCart(long id,
-                                           String search,
-                                           SortType sort,
-                                           int pageNumber,
-                                           int pageSize,
-                                           ActionType action) {
+                             String search,
+                             SortType sort,
+                             int pageNumber,
+                             int pageSize,
+                             ActionType action,
+                             RedirectAttributes redirectAttributes) {
         itemsService.updateCart(id, search, sort, pageNumber, pageSize, action);
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/items");
         if (search != null) {
-            builder.queryParam("search", search);
+            redirectAttributes.addAttribute("search", search);
         }
-        builder.queryParam("sort", sort)
-                .queryParam("pageNumber", pageNumber)
-                .queryParam("pageSize", pageSize);
+        redirectAttributes.addAttribute("sort", sort);
+        redirectAttributes.addAttribute("pageNumber", pageNumber);
+        redirectAttributes.addAttribute("pageSize", pageSize);
 
-        String redirectUrl = builder.build().toUriString();
-
-        return "redirect:" + redirectUrl;
+        return "redirect:/items";
     }
 
 
@@ -56,10 +54,10 @@ public class ItemsController implements ItemsApi {
     }
 
     @Override
-    public String updateCartFromItemPage(long id, ActionType action, Model model) {
-        var dto = itemsService.updateCartFromItemPage(id, action);
-        model.addAttribute("item", dto);
-        return "item";
+    public String updateCartFromItemPage(long id, ActionType action, RedirectAttributes redirectAttributes) {
+        itemsService.updateCartFromItemPage(id, action);
+        redirectAttributes.addAttribute("id", id);
+        return "redirect:/item";
     }
 }
 

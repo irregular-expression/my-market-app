@@ -1,11 +1,11 @@
 package ru.irrexp.practicum.mymarket.mapper;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import ru.irrexp.practicum.mymarket.dto.OrderDto;
-import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.entity.Order;
 import ru.irrexp.practicum.mymarket.entity.OrderItem;
@@ -14,8 +14,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@ActiveProfiles("test")
+@ExtendWith(SpringExtension.class)
+@ContextConfiguration(classes = {OrderMapperImpl.class, OrderItemMapperImpl.class})
 class OrderMapperTest {
 
     @Autowired
@@ -41,14 +41,15 @@ class OrderMapperTest {
 
         Item item = new Item();
         item.setId(1L);
+        item.setTitle("title");
+        item.setDescription("description");
+        item.setImgPath("/img.jpg");
         item.setPrice(1000L);
 
-        CartItem cartItem = new CartItem();
-        cartItem.setItem(item);
-        cartItem.setCount(3);
-
         OrderItem orderItem = new OrderItem();
+        orderItem.setId(2L);
         orderItem.setPrice(1000L);
+        orderItem.setItem(item);
         orderItem.setCount(3);
         orderItem.setOrder(order);
 
@@ -59,5 +60,8 @@ class OrderMapperTest {
         assertThat(dto.id()).isEqualTo(456L);
         assertThat(dto.totalSum()).isEqualTo(3000L);
         assertThat(dto.items()).hasSize(1);
+        assertThat(dto.items().getFirst().id()).isEqualTo(2L);
+        assertThat(dto.items().getFirst().title()).isEqualTo("title");
+        assertThat(dto.items().getFirst().count()).isEqualTo(3);
     }
 }

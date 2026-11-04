@@ -10,6 +10,7 @@ import ru.irrexp.practicum.mymarket.dto.CartResponse;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.enums.ActionType;
+import ru.irrexp.practicum.mymarket.exception.ItemNotFoundException;
 import ru.irrexp.practicum.mymarket.repository.CartItemRepository;
 import ru.irrexp.practicum.mymarket.repository.ItemRepository;
 
@@ -74,7 +75,7 @@ class CartServiceTest {
 
         CartResponse response = cartService.updateCartItem(cartItem.getId(), ActionType.PLUS);
         assertThat(response.items()).hasSize(1);
-        assertThat(response.items().get(0).count()).isEqualTo(2);
+        assertThat(response.items().getFirst().count()).isEqualTo(2);
         assertThat(response.total()).isEqualTo(100L);
     }
 
@@ -91,7 +92,7 @@ class CartServiceTest {
         cartItemRepository.saveAndFlush(cartItem);
 
         CartResponse response = cartService.updateCartItem(cartItem.getId(), ActionType.MINUS);
-        assertThat(response.items().get(0).count()).isEqualTo(1);
+        assertThat(response.items().getFirst().count()).isEqualTo(1);
         assertThat(response.total()).isEqualTo(30L);
 
         response = cartService.updateCartItem(cartItem.getId(), ActionType.MINUS);
@@ -127,7 +128,7 @@ class CartServiceTest {
 
         final long id = item.getId();
         assertThatThrownBy(() -> cartService.updateCartItem(id, ActionType.PLUS))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ItemNotFoundException.class)
                 .hasMessageContaining("Товар не найден в корзине");
     }
 }

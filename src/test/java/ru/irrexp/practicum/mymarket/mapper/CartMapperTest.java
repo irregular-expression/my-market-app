@@ -1,9 +1,10 @@
 package ru.irrexp.practicum.mymarket.mapper;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import ru.irrexp.practicum.mymarket.dto.CartResponse;
 import ru.irrexp.practicum.mymarket.dto.ItemDto;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
@@ -13,8 +14,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
-@ActiveProfiles("test")
+@ExtendWith(SpringExtension.class)
+@ContextConfiguration(classes = {CartMapperImpl.class, ItemMapperImpl.class})
 class CartMapperTest {
 
     @Autowired
@@ -37,8 +38,8 @@ class CartMapperTest {
         CartResponse response = cartMapper.toCartResponse(cartItems);
 
         assertThat(response.items()).hasSize(1);
-        ItemDto dto = response.items().get(0);
-        assertThat(dto.id()).isEqualTo(0L);
+        ItemDto dto = response.items().getFirst();
+        assertThat(dto.id()).isEqualTo(1L);
         assertThat(dto.title()).isEqualTo("Test Item");
         assertThat(dto.price()).isEqualTo(100L);
         assertThat(dto.count()).isEqualTo(3);

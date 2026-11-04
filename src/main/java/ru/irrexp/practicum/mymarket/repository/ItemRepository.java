@@ -1,14 +1,16 @@
 package ru.irrexp.practicum.mymarket.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import ru.irrexp.practicum.mymarket.entity.Item;
 
-import java.util.List;
-
 public interface ItemRepository extends JpaRepository<Item, Long> {
 
-    List<Item> findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-            String search, String search2);
+    Page<Item> findAll(Pageable pageable);
+
+    Page<Item> findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+            String title, String description, Pageable pageable);
 
 }
 

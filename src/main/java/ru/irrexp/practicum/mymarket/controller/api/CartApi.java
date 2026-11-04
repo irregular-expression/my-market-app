@@ -17,7 +17,6 @@ public interface CartApi {
     @PostMapping("/items")
     String updateCartItem(
             @RequestParam long id,
-            @RequestParam ActionType action,
-            Model model
+            @RequestParam ActionType action
     );
 }

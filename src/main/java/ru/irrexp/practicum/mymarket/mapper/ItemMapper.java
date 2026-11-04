@@ -21,7 +21,7 @@ public interface ItemMapper {
         return Optional.ofNullable(cartItem)
                 .filter(ci -> !isNull(ci.getItem()))
                 .map(ci -> new ItemDto(
-                        ci.getId() == null ? 0 : ci.getId(),
+                        ci.getItem().getId(),
                         ci.getItem().getTitle(),
                         ci.getItem().getDescription(),
                         ci.getItem().getImgPath(),

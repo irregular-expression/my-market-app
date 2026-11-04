@@ -11,6 +11,8 @@ import ru.irrexp.practicum.mymarket.dto.OrderDto;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.entity.Order;
+import ru.irrexp.practicum.mymarket.exception.OrderNotFoundException;
+import ru.irrexp.practicum.mymarket.exception.UnavailableBuyOperationException;
 import ru.irrexp.practicum.mymarket.repository.CartItemRepository;
 import ru.irrexp.practicum.mymarket.repository.ItemRepository;
 import ru.irrexp.practicum.mymarket.repository.OrderRepository;
@@ -74,7 +76,7 @@ class OrderServiceTest {
     @Test
     void getOrder_throwsWhenOrderNotFound() {
         assertThatThrownBy(() -> orderService.getOrder(9999L, false))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(OrderNotFoundException.class)
                 .hasMessageContaining("Заказ не найден");
     }
 
@@ -105,8 +107,8 @@ class OrderServiceTest {
 
         List<Order> orders = orderRepository.findAll();
         assertThat(orders).hasSize(1);
-        assertThat(orders.get(0).getId()).isEqualTo(orderId);
-        assertThat(orders.get(0).getTotalSum()).isEqualTo(73000L);
+        assertThat(orders.getFirst().getId()).isEqualTo(orderId);
+        assertThat(orders.getFirst().getTotalSum()).isEqualTo(73000L);
 
         List<CartItem> cartItems = cartItemRepository.findAll();
         assertThat(cartItems).isEmpty();
@@ -115,7 +117,7 @@ class OrderServiceTest {
     @Test
     void buy_throwsWhenCartIsEmpty() {
         assertThatThrownBy(() -> orderService.buy())
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(UnavailableBuyOperationException.class)
                 .hasMessageContaining("Корзина пуста");
     }
 }
