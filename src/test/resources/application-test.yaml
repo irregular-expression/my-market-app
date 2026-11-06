@@ -15,5 +15,5 @@ spring:
     schemas: markettest
 mymarket:
   catalog:
-    file: "catalog.csv"
+    file: "none"
 

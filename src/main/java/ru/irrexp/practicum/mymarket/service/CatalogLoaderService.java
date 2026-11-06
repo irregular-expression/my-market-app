@@ -51,6 +51,8 @@ public class CatalogLoaderService {
             return;
         }
 
+        if (items.isEmpty()) return;
+
         itemRepository.deleteAll();
         itemRepository.saveAll(items);
     }

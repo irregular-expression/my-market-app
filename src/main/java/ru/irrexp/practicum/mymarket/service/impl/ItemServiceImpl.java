@@ -96,15 +96,15 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     @Transactional
-    public ItemDto updateCartFromItemPage(long id, ActionType action) {
-        var cartItem = cartItemRepository.findByItemId(id);
+    public ItemDto updateCartFromItemPage(long itemId, ActionType action) {
+        var cartItem = cartItemRepository.findByItemId(itemId);
 
         if (cartItem.isPresent()) {
             CartItem ci = cartItem.get();
             cartService.processCartItemAction(ci, action);
             return itemMapper.mapCartItemToItemDto(ci);
         } else {
-            Item item = itemRepository.findById(id)
+            Item item = itemRepository.findById(itemId)
                     .orElseThrow(() -> new ItemNotFoundException("Товар не найден"));
             if (ActionType.PLUS == action) {
                 CartItem newCartItem = new CartItem();

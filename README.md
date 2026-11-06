@@ -37,3 +37,20 @@ docker run --name yp-database --rm --env-file env/.env -v postgres_data:/var/lib
 POSTGRES_PASSWORD=password'`
 
 Накат БД выполняется автоматически при сборке проекта. Тестовая БД накатывается при прогоне интеграционных тестов.
+ 
+06/11/2026 была изменена миграция 1.0.1, если у вас установлена более ранняя версия, то перед установкой приложения нужно выполнить следующий скрипт отката старой миграции:
+```sql
+BEGIN;
+
+SET search_path TO market;
+
+ALTER TABLE cart_items DROP CONSTRAINT IF EXISTS chk_cart_items_count_positive;
+DELETE FROM flyway_schema_history WHERE installed_rank = 2;
+
+SET search_path TO markettest;
+
+ALTER TABLE cart_items DROP CONSTRAINT IF EXISTS chk_cart_items_count_positive;
+DELETE FROM flyway_schema_history WHERE installed_rank = 2;
+
+COMMIT;
+```

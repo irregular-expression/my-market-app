@@ -29,8 +29,8 @@ public class CartServiceImpl implements CartService {
 
     @Override
     @Transactional
-    public CartResponse updateCartItem(long id, ActionType action) {
-        CartItem cartItem = cartItemRepository.findById(id)
+    public CartResponse updateCartItem(long itemId, ActionType action) {
+        CartItem cartItem = cartItemRepository.findByItemId(itemId)
                 .orElseThrow(() -> new ItemNotFoundException("Товар не найден в корзине"));
 
         processCartItemAction(cartItem, action);

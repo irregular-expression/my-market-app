@@ -30,8 +30,7 @@ public interface ItemsApi {
     @PostMapping("/{id}")
     String updateCartFromItemPage(
             @PathVariable long id,
-            @RequestParam ActionType action,
-            RedirectAttributes redirectAttributes
+            @RequestParam ActionType action
     );
 
     @GetMapping

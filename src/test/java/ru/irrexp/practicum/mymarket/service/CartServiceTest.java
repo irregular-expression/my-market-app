@@ -73,7 +73,7 @@ class CartServiceTest {
         cartItem.setCount(1);
         cartItemRepository.save(cartItem);
 
-        CartResponse response = cartService.updateCartItem(cartItem.getId(), ActionType.PLUS);
+        CartResponse response = cartService.updateCartItem(item.getId(), ActionType.PLUS);
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().getFirst().count()).isEqualTo(2);
         assertThat(response.total()).isEqualTo(100L);
@@ -91,11 +91,11 @@ class CartServiceTest {
         cartItem.setCount(2);
         cartItemRepository.saveAndFlush(cartItem);
 
-        CartResponse response = cartService.updateCartItem(cartItem.getId(), ActionType.MINUS);
+        CartResponse response = cartService.updateCartItem(item.getId(), ActionType.MINUS);
         assertThat(response.items().getFirst().count()).isEqualTo(1);
         assertThat(response.total()).isEqualTo(30L);
 
-        response = cartService.updateCartItem(cartItem.getId(), ActionType.MINUS);
+        response = cartService.updateCartItem(item.getId(), ActionType.MINUS);
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
         assertThat(cartItemRepository.findByItemId(item.getId())).isEmpty();
@@ -113,7 +113,7 @@ class CartServiceTest {
         cartItem.setCount(3);
         cartItemRepository.save(cartItem);
 
-        CartResponse response = cartService.updateCartItem(cartItem.getId(), ActionType.DELETE);
+        CartResponse response = cartService.updateCartItem(item.getId(), ActionType.DELETE);
         assertThat(response.items()).isEmpty();
         assertThat(response.total()).isZero();
         assertThat(cartItemRepository.findByItemId(item.getId())).isEmpty();

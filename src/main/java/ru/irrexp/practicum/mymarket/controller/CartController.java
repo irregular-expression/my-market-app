@@ -24,7 +24,7 @@ public class CartController implements CartApi {
     @Override
     public String updateCartItem(long id, ActionType action) {
         cartService.updateCartItem(id, action);
-        return "redirect:/cart";
+        return "redirect:/cart/items";
     }
 }
 

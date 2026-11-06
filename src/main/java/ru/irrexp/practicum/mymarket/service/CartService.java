@@ -8,7 +8,7 @@ public interface CartService {
 
     CartResponse getCart();
 
-    CartResponse updateCartItem(long id, ActionType action);
+    CartResponse updateCartItem(long itemId, ActionType action);
 
     void processCartItemAction(CartItem cartItem, ActionType action);
 }

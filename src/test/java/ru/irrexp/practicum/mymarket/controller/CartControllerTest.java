@@ -48,7 +48,7 @@ class CartControllerTest {
                                 .param("id", "123")
                                 .param("action", "PLUS"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(view().name("redirect:/cart"));
+                .andExpect(view().name("redirect:/cart/items"));
     }
 }
 
