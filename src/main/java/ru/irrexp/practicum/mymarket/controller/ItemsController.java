@@ -56,7 +56,7 @@ public class ItemsController implements ItemsApi {
     @Override
     public String updateCartFromItemPage(long id, ActionType action) {
         itemsService.updateCartFromItemPage(id, action);
-        return "redirect:/item/" + id;
+        return "redirect:/items/" + id;
     }
 }
 
