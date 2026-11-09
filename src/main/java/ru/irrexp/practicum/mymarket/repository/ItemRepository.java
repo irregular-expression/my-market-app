@@ -1,16 +1,21 @@
 package ru.irrexp.practicum.mymarket.repository;
 
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import ru.irrexp.practicum.mymarket.entity.Item;
 
-public interface ItemRepository extends JpaRepository<Item, Long> {
+@Repository
+public interface ItemRepository extends ReactiveCrudRepository<Item, Long> {
 
-    Page<Item> findAll(Pageable pageable);
+    Flux<Item> findAllBy(Pageable pageable);
 
-    Page<Item> findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
-            String title, String description, Pageable pageable);
-
+    Flux<Item> findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+            String titleSearch,
+            String descriptionSearch,
+            Pageable pageable
+    );
 }
+
 

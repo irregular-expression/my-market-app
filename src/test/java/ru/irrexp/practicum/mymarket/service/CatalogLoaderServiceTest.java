@@ -1,17 +1,15 @@
 package ru.irrexp.practicum.mymarket.service;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.repository.ItemRepository;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,7 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class CatalogLoaderServiceTest {
 
     @Autowired
@@ -30,102 +27,99 @@ class CatalogLoaderServiceTest {
     @Autowired
     private ItemRepository itemRepository;
 
-    private Path tempCatalogFile;
+    @TempDir
+    Path tempDir;
 
     @BeforeEach
-    void setUp() throws IOException {
-        tempCatalogFile = Files.createTempFile("catalog", ".csv");
-        itemRepository.deleteAll();
+    void cleanUp() {
+        itemRepository.deleteAll().block();
     }
 
-    @AfterEach
-    void tearDown() throws IOException {
-        if (Files.exists(tempCatalogFile)) {
-            Files.delete(tempCatalogFile);
-        }
+    private void seedCatalog() {
+        Item existing1 = new Item();
+        existing1.setTitle("Старый товар 1");
+        existing1.setDescription("Описание");
+        existing1.setImgPath("/img/old1.png");
+        existing1.setPrice(1L);
+        Item existing2 = new Item();
+        existing2.setTitle("Старый товар 2");
+        existing2.setDescription("Описание");
+        existing2.setImgPath("/img/old2.png");
+        existing2.setPrice(2L);
+        itemRepository.saveAll(List.of(existing1, existing2)).collectList().block();
+    }
+
+    private Path writeFile(String content) throws Exception {
+        Path file = tempDir.resolve("catalog_" + System.nanoTime() + ".csv");
+        Files.writeString(file, content, StandardCharsets.UTF_8);
+        return file;
+    }
+
+    private List<String> storedTitles() {
+        return itemRepository.findAll().collectList().block().stream()
+                .map(Item::getTitle)
+                .toList();
     }
 
     @Test
-    void loadCatalog_whenFileExistsAndValid_thenItemsAreSaved() throws Exception {
-        String content = """
-                Смартфон Pro X;Флагманский смартфон с камерой 200 МП и экраном 120 Гц.;/static/images/smartphone_pro_x.png;89900
-                Ноутбук Ultra;Тонкий ноутбук с OLED-экраном и долгим временем работы;/static/images/laptop_ultra.png;129900
+    @DisplayName("Пустой файл — каталог не перезаписывается")
+    void loadCatalog_emptyFile_keepsExistingData() throws Exception {
+        seedCatalog();
+        catalogLoaderService.setCatalogFilePath(writeFile("").toString());
+
+        catalogLoaderService.loadCatalog();
+
+        assertThat(itemRepository.count().block()).isEqualTo(2L);
+        assertThat(storedTitles()).containsExactlyInAnyOrder("Старый товар 1", "Старый товар 2");
+    }
+
+    @Test
+    @DisplayName("Файл только из невалидных строк — каталог не перезаписывается")
+    void loadCatalog_invalidFile_keepsExistingData() throws Exception {
+        seedCatalog();
+        String invalid = """
+                только-одна-колонка
+                title;desc;img;not_a_number
+                title;desc;img;-5
+                ;desc;img;10
+                title;desc;;10
                 """;
-        Files.writeString(tempCatalogFile, content, StandardCharsets.UTF_8);
+        catalogLoaderService.setCatalogFilePath(writeFile(invalid).toString());
 
-        catalogLoaderService.setCatalogFilePath(tempCatalogFile.toString());
         catalogLoaderService.loadCatalog();
 
-        List<Item> items = itemRepository.findAll();
-        assertThat(items).hasSize(2);
-
-        Item phone = items.getFirst();
-        assertThat(phone.getTitle()).isEqualTo("Смартфон Pro X");
-        assertThat(phone.getPrice()).isEqualTo(89900L);
-        assertThat(phone.getImgPath()).isEqualTo("/static/images/smartphone_pro_x.png");
-
-        Item laptop = items.get(1);
-        assertThat(laptop.getTitle()).isEqualTo("Ноутбук Ultra");
-        assertThat(laptop.getPrice()).isEqualTo(129900L);
+        assertThat(itemRepository.count().block()).isEqualTo(2L);
+        assertThat(storedTitles()).containsExactlyInAnyOrder("Старый товар 1", "Старый товар 2");
     }
 
     @Test
-    void loadCatalog_whenFileDoesNotExist_thenNothingHappens() {
+    @DisplayName("Файл не существует — каталог не перезаписывается")
+    void loadCatalog_missingFile_keepsExistingData() {
+        seedCatalog();
+        catalogLoaderService.setCatalogFilePath(tempDir.resolve("no_such_file.csv").toString());
+
         catalogLoaderService.loadCatalog();
 
-        assertThat(itemRepository.findAll()).isEmpty();
+        assertThat(itemRepository.count().block()).isEqualTo(2L);
     }
 
     @Test
-    void loadCatalog_withInvalidLines_thenOnlyValidItemsAreSaved() throws Exception {
-        String content = """
-                Смартфон Pro X;Флагманский смартфон с камерой 200 МП.;/static/images/smartphone_pro_x.png;89900
-                ;Пустая строка, title отсутствует;;
-                Плохой формат;Только три поля;/static/bad.png
-                Ещё один товар;Описание товара;/static/another.png;-500
-                Товар с отрицательной ценой;Описание;/static/negative.png;-100
-                Последний товар;Описание;/static/last.png;999
+    @DisplayName("Валидный файл со смешанными строками — каталог заменяется только валидными товарами")
+    void loadCatalog_validFile_replacesCatalog() throws Exception {
+        seedCatalog();
+        String valid = """
+                Молоко;Просто молоко;/img/milk.png;89
+                Хлеб;Чёрный хлеб;/img/bread.png;45
+
+                не-число;desc;/img/x.png;abc
+                негативная;desc;/img/y.png;-1
                 """;
-        Files.writeString(tempCatalogFile, content, StandardCharsets.UTF_8);
+        catalogLoaderService.setCatalogFilePath(writeFile(valid).toString());
 
-        catalogLoaderService.setCatalogFilePath(tempCatalogFile.toString());
         catalogLoaderService.loadCatalog();
 
-        List<Item> items = itemRepository.findAll();
-        // Ожидаем только полностью валидные строки: 1-я и последняя
-        assertThat(items).hasSize(2);
-
-        Item first = items.getFirst();
-        assertThat(first.getTitle()).isEqualTo("Смартфон Pro X");
-        assertThat(first.getPrice()).isEqualTo(89900L);
-
-        Item last = items.get(1);
-        assertThat(last.getTitle()).isEqualTo("Последний товар");
-        assertThat(last.getPrice()).isEqualTo(999L);
-    }
-
-    @Test
-    @Transactional
-    void loadCatalog_clearsTableBeforeInserting() throws Exception {
-        // Сначала положим в БД какие-то данные
-        Item existing = new Item();
-        existing.setTitle("Old Item");
-        existing.setDescription("Old");
-        existing.setImgPath("/static/old.png");
-        existing.setPrice(100L);
-        itemRepository.save(existing);
-        assertThat(itemRepository.findAll()).hasSize(1);
-
-        String content = """
-                Новый товар;Описание нового товара;/static/new.png;500
-                """;
-        Files.writeString(tempCatalogFile, content, StandardCharsets.UTF_8);
-        catalogLoaderService.setCatalogFilePath(tempCatalogFile.toString());
-        catalogLoaderService.loadCatalog();
-
-        List<Item> items = itemRepository.findAll();
-        assertThat(items).hasSize(1); // Старый товар удалён, остался только новый
-        assertThat(items.getFirst().getTitle()).isEqualTo("Новый товар");
+        List<String> titles = storedTitles();
+        assertThat(titles).containsExactlyInAnyOrder("Молоко", "Хлеб");
     }
 }
 
