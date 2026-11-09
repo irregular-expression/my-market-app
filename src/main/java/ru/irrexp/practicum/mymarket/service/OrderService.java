@@ -1,16 +1,16 @@
 package ru.irrexp.practicum.mymarket.service;
 
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.irrexp.practicum.mymarket.dto.OrderDetailResponse;
 import ru.irrexp.practicum.mymarket.dto.OrderDto;
 
-import java.util.List;
-
 public interface OrderService {
 
-    List<OrderDto> getOrders();
+    Flux<OrderDto> getOrders();
 
-    OrderDetailResponse getOrder(long id, boolean newOrder);
+    Mono<OrderDetailResponse> getOrder(long id, boolean newOrder);
 
-    long buy(); // возвращает id созданного заказа
+    Mono<Long> buy(); // возвращает id созданного заказа
 }
 

@@ -2,10 +2,11 @@ package ru.irrexp.practicum.mymarket.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
 import ru.irrexp.practicum.mymarket.controller.api.ItemsApi;
-import ru.irrexp.practicum.mymarket.enums.ActionType;
+import ru.irrexp.practicum.mymarket.dto.ActionRequest;
+import ru.irrexp.practicum.mymarket.dto.ItemCartRequest;
 import ru.irrexp.practicum.mymarket.enums.SortType;
 import ru.irrexp.practicum.mymarket.service.ItemService;
 
@@ -16,48 +17,48 @@ public class ItemsController implements ItemsApi {
     private final ItemService itemsService;
 
     @Override
-    public String getItems(Model model, String search, SortType sort, int pageNumber, int pageSize) {
-        var result = itemsService.getItems(search, sort, pageNumber, pageSize);
-        model.addAttribute("items", result.items());
-        model.addAttribute("search", result.search());
-        model.addAttribute("sort", result.sort());
-        model.addAttribute("paging", result.paging());
-        return "items";
+    public Mono<Rendering> getItems(String search, SortType sort, int pageNumber, int pageSize) {
+        return itemsService.getItems(search, sort, pageNumber, pageSize)
+                .map(result -> Rendering.view("items")
+                        .modelAttribute("items", result.items())
+                        .modelAttribute("search", result.search())
+                        .modelAttribute("sort", result.sort())
+                        .modelAttribute("paging", result.paging())
+                        .build());
     }
 
     @Override
-    public String updateCart(long id,
-                             String search,
-                             SortType sort,
-                             int pageNumber,
-                             int pageSize,
-                             ActionType action,
-                             RedirectAttributes redirectAttributes) {
-        itemsService.updateCart(id, search, sort, pageNumber, pageSize, action);
-
-        if (search != null) {
-            redirectAttributes.addAttribute("search", search);
+    public Mono<Rendering> updateCart(ItemCartRequest itemCartRequest) {
+        String redirectUrl = "/items";
+        if (itemCartRequest.search() != null) {
+            redirectUrl += "?search=" + itemCartRequest.search()
+                    + "&sort=" + itemCartRequest.sort()
+                    + "&pageNumber=" + itemCartRequest.pageNumber()
+                    + "&pageSize=" + itemCartRequest.pageSize();
+        } else {
+            redirectUrl += "?sort=" + itemCartRequest.sort()
+                    + "&pageNumber=" + itemCartRequest.pageNumber()
+                    + "&pageSize=" + itemCartRequest.pageSize();
         }
-        redirectAttributes.addAttribute("sort", sort);
-        redirectAttributes.addAttribute("pageNumber", pageNumber);
-        redirectAttributes.addAttribute("pageSize", pageSize);
+        return itemsService.updateCart(itemCartRequest.id(), itemCartRequest.action())
+                .then(Mono.just(Rendering.redirectTo(redirectUrl).build()));
 
-        return "redirect:/items";
-    }
-
-
-    @Override
-    public String getItem(long id, Model model) {
-        var dto = itemsService.getItem(id);
-        model.addAttribute("item", dto);
-        return "item";
     }
 
     @Override
-    public String updateCartFromItemPage(long id, ActionType action) {
-        itemsService.updateCartFromItemPage(id, action);
-        return "redirect:/items/" + id;
+    public Mono<Rendering> getItem(long id) {
+        return itemsService.getItem(id)
+                .map(dto -> Rendering.view("item")
+                        .modelAttribute("item", dto)
+                        .build());
+    }
+
+    @Override
+    public Mono<Rendering> updateCartFromItemPage(long id, ActionRequest actionRequest) {
+        return itemsService.updateCart(id, actionRequest.action())
+                .then(Mono.just(Rendering.redirectTo("/items/" + id).build()));
     }
 }
+
 
 

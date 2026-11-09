@@ -2,9 +2,8 @@ package ru.irrexp.practicum.mymarket.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
 import ru.irrexp.practicum.mymarket.controller.api.OrdersApi;
 import ru.irrexp.practicum.mymarket.service.OrderService;
 
@@ -15,19 +14,22 @@ public class OrdersController implements OrdersApi {
     private final OrderService ordersService;
 
     @Override
-    public String getOrders(Model model) {
-        model.addAttribute("orders", ordersService.getOrders());
-        return "orders";
+    public Mono<Rendering> getOrders() {
+        return ordersService.getOrders()
+                .collectList()
+                .map(list -> Rendering.view("orders")
+                        .modelAttribute("orders", list)
+                        .build());
     }
 
     @Override
-    public String getOrder(@PathVariable long id,
-                           @RequestParam(defaultValue = "false") boolean newOrder,
-                           Model model) {
-        var dto = ordersService.getOrder(id, newOrder);
-        model.addAttribute("order", dto.order());
-        model.addAttribute("newOrder", dto.newOrder());
-        return "order";
+    public Mono<Rendering> getOrder(long id, boolean newOrder) {
+        return ordersService.getOrder(id, newOrder)
+                .map(dto -> Rendering.view("order")
+                        .modelAttribute("order", dto.order())
+                        .modelAttribute("newOrder", dto.newOrder())
+                        .build());
     }
 }
+
 
