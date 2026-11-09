@@ -1,84 +1,106 @@
 package ru.irrexp.practicum.mymarket.mapper;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
-import ru.irrexp.practicum.mymarket.dto.CartResponse;
-import ru.irrexp.practicum.mymarket.dto.ItemDto;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = {CartMapperImpl.class, ItemMapperImpl.class})
 class CartMapperTest {
 
-    @Autowired
-    private CartMapper cartMapper;
+    private final ItemMapper itemMapper = new ItemMapperImpl();
+    private final CartMapper mapper = new CartMapper(itemMapper);
 
-    @Test
-    void toCartResponse_mapsItemsAndCalculatesTotal() {
+    private Item item(long id, String title, long price) {
         Item item = new Item();
-        item.setId(1L);
-        item.setTitle("Test Item");
-        item.setDescription("Desc");
-        item.setImgPath("/static/test.png");
-        item.setPrice(100L);
+        item.setId(id);
+        item.setTitle(title);
+        item.setDescription("Описание " + title);
+        item.setImgPath("/img/" + title + ".png");
+        item.setPrice(price);
+        return item;
+    }
 
+    private CartItem cartItem(long itemId, int count) {
         CartItem cartItem = new CartItem();
-        cartItem.setItem(item);
-        cartItem.setCount(3);
-
-        List<CartItem> cartItems = List.of(cartItem);
-        CartResponse response = cartMapper.toCartResponse(cartItems);
-
-        assertThat(response.items()).hasSize(1);
-        ItemDto dto = response.items().getFirst();
-        assertThat(dto.id()).isEqualTo(1L);
-        assertThat(dto.title()).isEqualTo("Test Item");
-        assertThat(dto.price()).isEqualTo(100L);
-        assertThat(dto.count()).isEqualTo(3);
-        assertThat(response.total()).isEqualTo(300L);
+        cartItem.setItemId(itemId);
+        cartItem.setCount(count);
+        return cartItem;
     }
 
     @Test
-    void toCartResponse_handlesNullList() {
-        CartResponse response = cartMapper.toCartResponse(null);
-        assertThat(response.items()).isEmpty();
-        assertThat(response.total()).isZero();
+    @DisplayName("toCartResponse — пустая и null-корзина: пустой список и нулевая сумма")
+    void toCartResponse_nullOrEmpty() {
+        assertThat(mapper.toCartResponse(null, Map.of()).items()).isEmpty();
+        assertThat(mapper.toCartResponse(null, Map.of()).total()).isZero();
+        assertThat(mapper.toCartResponse(List.of(), Map.of()).items()).isEmpty();
+        assertThat(mapper.toCartResponse(List.of(), Map.of()).total()).isZero();
     }
 
     @Test
-    void toCartResponse_calculatesTotalFromMultipleItems() {
-        Item item1 = new Item();
-        item1.setId(2L);
-        item1.setTitle("Item A");
-        item1.setPrice(200L);
+    @DisplayName("toCartResponse — товары и сумма считаются по ценам каталога и счётчикам корзины")
+    void toCartResponse_mapsItemsAndSumsTotal() {
+        Map<Long, Item> itemMap = Map.of(
+                1L, item(1L, "Молоко", 89L),
+                2L, item(2L, "Хлеб", 45L));
+        List<CartItem> cartItems = List.of(cartItem(1L, 2), cartItem(2L, 1));
 
-        Item item2 = new Item();
-        item2.setId(3L);
-        item2.setTitle("Item B");
-        item2.setPrice(50L);
+        var response = mapper.toCartResponse(cartItems, itemMap);
 
-        CartItem ci1 = new CartItem();
-        ci1.setId(1L);
-        ci1.setItem(item1);
-        ci1.setCount(2);
+        assertThat(response.items()).hasSize(2);
+        assertThat(response.total()).isEqualTo(223L);
 
-        CartItem ci2 = new CartItem();
-        ci2.setId(2L);
-        ci2.setItem(item2);
-        ci2.setCount(4);
+        var milk = response.items().stream()
+                .filter(dto -> dto.id() == 1L)
+                .findFirst()
+                .orElseThrow();
+        assertThat(milk.title()).isEqualTo("Молоко");
+        assertThat(milk.count()).isEqualTo(2);
+    }
 
-        List<CartItem> cartItems = List.of(ci1, ci2);
-        CartResponse response = cartMapper.toCartResponse(cartItems);
+    @Test
+    @DisplayName("toItemDtoList — null и пустой список дают пустой результат")
+    void toItemDtoList_nullOrEmpty() {
+        assertThat(mapper.toItemDtoList(null, Map.of())).isEmpty();
+        assertThat(mapper.toItemDtoList(List.of(), Map.of())).isEmpty();
+    }
 
-        assertThat(response.total()).isEqualTo(600L);
+    @Test
+    @DisplayName("toItemDtoList — позиция без товара в каталоге: DTO с неполными данными")
+    void toItemDtoList_missingItem_partialDto() {
+        Map<Long, Item> itemMap = Map.of(1L, item(1L, "Молоко", 89L));
+        List<CartItem> cartItems = List.of(cartItem(1L, 1), cartItem(99L, 4));
+
+        var dtos = mapper.toItemDtoList(cartItems, itemMap);
+
+        assertThat(dtos).hasSize(2);
+        var broken = dtos.stream()
+                .filter(dto -> dto.count() == 4)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(0, broken.id());
+        assertThat(broken.title()).isNull();
+    }
+
+    @Test
+    @DisplayName("totalSum — позиция без товара в каталоге вносит ноль в сумму")
+    void totalSum_missingItem_countsAsZero() {
+        Map<Long, Item> itemMap = Map.of(1L, item(1L, "Молоко", 89L));
+        List<CartItem> cartItems = List.of(cartItem(1L, 2), cartItem(99L, 10));
+
+        assertThat(mapper.totalSum(cartItems, itemMap)).isEqualTo(178L);
+    }
+
+    @Test
+    @DisplayName("totalSum — null и пустой список дают ноль")
+    void totalSum_nullOrEmpty() {
+        assertThat(mapper.totalSum(null, Map.of())).isZero();
+        assertThat(mapper.totalSum(List.of(), Map.of())).isZero();
     }
 }
 
