@@ -1,12 +1,13 @@
 package ru.irrexp.practicum.mymarket.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.irrexp.practicum.mymarket.dto.ItemDto;
 import ru.irrexp.practicum.mymarket.dto.ItemsPageResponse;
 import ru.irrexp.practicum.mymarket.dto.PagingInfo;
@@ -21,6 +22,7 @@ import ru.irrexp.practicum.mymarket.repository.CartItemRepository;
 import ru.irrexp.practicum.mymarket.repository.ItemRepository;
 import ru.irrexp.practicum.mymarket.service.CartService;
 import ru.irrexp.practicum.mymarket.service.ItemService;
+import ru.irrexp.practicum.mymarket.util.OffsetLimitRequest;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,28 +43,42 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     @Transactional(readOnly = true)
-    public ItemsPageResponse getItems(String search, SortType sort, int pageNumber, int pageSize) {
+    public Mono<ItemsPageResponse> getItems(String search, SortType sort, int pageNumber, int pageSize) {
         validatePaginationParams(pageNumber, pageSize);
 
-        Pageable pageable = PageRequest.of(pageNumber - 1, pageSize, toSort(sort));
+        // на одну запись больше, чтобы определить hasNext
+        Pageable pageable = OffsetLimitRequest.of(
+                pageNumber - 1,
+                pageSize + 1,
+                (long) (pageNumber - 1) * pageSize,
+                toSort(sort));
 
-        Page<Item> page = isBlank(search)
-                ? itemRepository.findAll(pageable)
+
+        return findPage(search, pageable)
+                .collectList()
+                .flatMap(rows -> buildResponse(rows, search, sort, pageNumber, pageSize));
+    }
+
+    private Flux<Item> findPage(String search, Pageable pageable) {
+        return isBlank(search)
+                ? itemRepository.findAllBy(pageable)
                 : itemRepository.findByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
                 search, search, pageable);
+    }
 
-        List<ItemDto> itemDtos = page.getContent().stream()
-                .map(this::mapFromCartIfExisted)
-                .toList();
+    private Mono<ItemsPageResponse> buildResponse(List<Item> rows, String search,
+                                                  SortType sort, int pageNumber, int pageSize) {
+        boolean hasNext = rows.size() > pageSize;
+        List<Item> pageContent = hasNext ? rows.subList(0, pageSize) : rows;
 
-        List<List<ItemDto>> grouped = groupIntoRowsOfThree(itemDtos);
-
-        boolean hasPrevious = pageNumber > 1;
-        boolean hasNext = page.hasNext();
-
-        PagingInfo paging = new PagingInfo(pageSize, pageNumber, hasPrevious, hasNext);
-
-        return new ItemsPageResponse(grouped, search, sort, paging);
+        return Flux.fromIterable(pageContent)
+                .flatMapSequential(this::mapFromCartIfExisted)
+                .collectList()
+                .map(itemDtos -> new ItemsPageResponse(
+                        groupIntoRowsOfThree(itemDtos),
+                        search,
+                        sort,
+                        new PagingInfo(pageSize, pageNumber, pageNumber > 1, hasNext)));
     }
 
     private void validatePaginationParams(int pageNumber, int pageSize) {
@@ -88,50 +104,52 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     @Transactional(readOnly = true)
-    public ItemDto getItem(long id) {
-        Item item = itemRepository.findById(id)
-                .orElseThrow(() -> new ItemNotFoundException("Товар не найден"));
-        return mapFromCartIfExisted(item);
+    public Mono<ItemDto> getItem(long id) {
+        return itemRepository.findById(id)
+                .switchIfEmpty(Mono.error(new ItemNotFoundException("Товар не найден")))
+                .flatMap(this::mapFromCartIfExisted);
     }
 
     @Override
     @Transactional
-    public ItemDto updateCartFromItemPage(long itemId, ActionType action) {
-        var cartItem = cartItemRepository.findByItemId(itemId);
-
-        if (cartItem.isPresent()) {
-            CartItem ci = cartItem.get();
-            cartService.processCartItemAction(ci, action);
-            return itemMapper.mapCartItemToItemDto(ci);
-        } else {
-            Item item = itemRepository.findById(itemId)
-                    .orElseThrow(() -> new ItemNotFoundException("Товар не найден"));
-            if (ActionType.PLUS == action) {
-                CartItem newCartItem = new CartItem();
-                newCartItem.setItem(item);
-                newCartItem.setCount(1);
-                cartItemRepository.save(newCartItem);
-                return itemMapper.mapCartItemToItemDto(newCartItem);
-            } else {
-                return itemMapper.toDto(item);
-            }
-        }
+    public Mono<ItemDto> updateCart(long itemId, ActionType action) {
+        return cartItemRepository.findByItemId(itemId)
+                .flatMap(cartItem -> itemRepository.findById(itemId)
+                        .flatMap(item -> {
+                            cartService.processCartItemAction(cartItem, action);
+                            return persistCartItem(cartItem)
+                                    .thenReturn(itemMapper.mapCartItemToItemDto(cartItem, item));
+                        }))
+                .switchIfEmpty(addItemToCartIfPossible(itemId, action));
     }
 
-    @Override
-    @Transactional
-    public void updateCart(long id, String search, SortType sort, int pageNumber, int pageSize, ActionType action) {
-        updateCartFromItemPage(id, action);
+    private Mono<Void> persistCartItem(CartItem cartItem) {
+        return cartItem.getCount() == 0
+                ? cartItemRepository.delete(cartItem)
+                : cartItemRepository.save(cartItem).then();
     }
 
-    private ItemDto mapFromCartIfExisted(Item item) {
-        var cartItem = cartItemRepository.findByItemId(item.getId());
-        if (cartItem.isPresent()) {
-            return itemMapper.mapCartItemToItemDto(cartItem.get());
-        } else {
-            return itemMapper.toDto(item);
-        }
+    private Mono<ItemDto> addItemToCartIfPossible(long itemId, ActionType action) {
+        return itemRepository.findById(itemId)
+                .switchIfEmpty(Mono.error(new ItemNotFoundException("Товар не найден")))
+                .flatMap(item -> {
+                    if (ActionType.PLUS == action) {
+                        CartItem newCartItem = new CartItem();
+                        newCartItem.setItemId(item.getId());
+                        newCartItem.setCount(1);
+                        return cartItemRepository.save(newCartItem)
+                                .map(saved -> itemMapper.mapCartItemToItemDto(saved, item));
+                    }
+                    return Mono.just(itemMapper.toDto(item));
+                });
     }
+
+    private Mono<ItemDto> mapFromCartIfExisted(Item item) {
+        return cartItemRepository.findByItemId(item.getId())
+                .map(cartItem -> itemMapper.mapCartItemToItemDto(cartItem, item))
+                .switchIfEmpty(Mono.just(itemMapper.toDto(item)));
+    }
+
 
     private List<List<ItemDto>> groupIntoRowsOfThree(List<ItemDto> items) {
         List<List<ItemDto>> result = new ArrayList<>();
