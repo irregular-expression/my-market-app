@@ -1,12 +1,13 @@
 package ru.irrexp.practicum.mymarket.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import org.springframework.stereotype.Repository;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
+import reactor.core.publisher.Mono;
 
-import java.util.Optional;
+@Repository
+public interface CartItemRepository extends ReactiveCrudRepository<CartItem, Long> {
 
-public interface CartItemRepository extends JpaRepository<CartItem, Long> {
-
-    Optional<CartItem> findByItemId(Long itemId);
+    Mono<CartItem> findByItemId(Long itemId);
 
 }

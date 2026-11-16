@@ -1,10 +1,13 @@
 package ru.irrexp.practicum.mymarket.controller.api;
 
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
+import ru.irrexp.practicum.mymarket.dto.UpdateCartRequest;
 import ru.irrexp.practicum.mymarket.enums.ActionType;
 
 
@@ -12,11 +15,10 @@ import ru.irrexp.practicum.mymarket.enums.ActionType;
 public interface CartApi {
 
     @GetMapping("/items")
-    String getCartItems(Model model);
+    Mono<Rendering> getCartItems();
 
     @PostMapping("/items")
-    String updateCartItem(
-            @RequestParam long id,
-            @RequestParam ActionType action
-    );
+    Mono<Rendering> updateCartItem(
+            @ModelAttribute UpdateCartRequest updateCartRequest
+            );
 }

@@ -1,18 +1,18 @@
 spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5433/postgres?currentSchema=markettest
+  r2dbc:
+    url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/postgres?schema=market
     username: ${DB_USER:practicum_user}
     password: ${DB_PASSWORD:mysecretpassword}
-    driver-class-name: org.postgresql.Driver
-  jpa:
-    show-sql: true
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        format_sql: true
   flyway:
-    schemas: markettest
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/postgres?currentSchema=market
+    user: ${DB_USER:practicum_user}
+    password: ${DB_PASSWORD:mysecretpassword}
+    driver-class-name: org.postgresql.Driver
+    schemas: market
+  data:
+    r2dbc:
+      repositories:
+        enabled: true
 mymarket:
   catalog:
     file: "none"

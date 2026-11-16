@@ -6,6 +6,7 @@ import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.repository.ItemRepository;
 
@@ -24,13 +25,13 @@ import java.util.Optional;
 public class CatalogLoaderService {
 
     private final ItemRepository itemRepository;
+    private final TransactionalOperator transactionalOperator;
 
     @Setter
     @Value("${mymarket.catalog.file}")
     private String catalogFilePath;
 
     @PostConstruct
-    @Transactional
     public void loadCatalog() {
         File catalogFile = new File(catalogFilePath);
 
@@ -53,8 +54,11 @@ public class CatalogLoaderService {
 
         if (items.isEmpty()) return;
 
-        itemRepository.deleteAll();
-        itemRepository.saveAll(items);
+        itemRepository.deleteAll()
+                .thenMany(itemRepository.saveAll(items))
+                .as(transactionalOperator::transactional)
+                .then()
+                .block();
     }
 
     private Optional<Item> parseLine(String line) {
@@ -97,4 +101,3 @@ public class CatalogLoaderService {
         return Optional.of(item);
     }
 }
-

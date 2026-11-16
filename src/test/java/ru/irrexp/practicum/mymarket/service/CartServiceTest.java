@@ -1,12 +1,13 @@
 package ru.irrexp.practicum.mymarket.service;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
-import ru.irrexp.practicum.mymarket.dto.CartResponse;
+import reactor.test.StepVerifier;
+import ru.irrexp.practicum.mymarket.dto.ItemDto;
 import ru.irrexp.practicum.mymarket.entity.CartItem;
 import ru.irrexp.practicum.mymarket.entity.Item;
 import ru.irrexp.practicum.mymarket.enums.ActionType;
@@ -15,10 +16,8 @@ import ru.irrexp.practicum.mymarket.repository.CartItemRepository;
 import ru.irrexp.practicum.mymarket.repository.ItemRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
-@Transactional
 @ActiveProfiles("test")
 class CartServiceTest {
 
@@ -26,110 +25,137 @@ class CartServiceTest {
     private CartService cartService;
 
     @Autowired
-    private CartItemRepository cartItemRepository;
-
-    @Autowired
     private ItemRepository itemRepository;
 
+    @Autowired
+    private CartItemRepository cartItemRepository;
+
     @BeforeEach
-    void setUp() {
-        cartItemRepository.deleteAll();
-        itemRepository.deleteAll();
+    void cleanUp() {
+        cartItemRepository.deleteAll().then(itemRepository.deleteAll()).block();
     }
 
-    @Test
-    void getCart_returnsEmptyResponseWhenNoItems() {
-        CartResponse response = cartService.getCart();
-        assertThat(response.items()).isEmpty();
-        assertThat(response.total()).isZero();
-    }
-
-    @Test
-    void getCart_returnsItemsFromRepository() {
+    private Item item(String title, long price) {
         Item item = new Item();
-        item.setTitle("Test Item");
-        item.setPrice(100L);
-        item = itemRepository.save(item);
+        item.setTitle(title);
+        item.setDescription("Описание " + title);
+        item.setImgPath("/img/" + title + ".png");
+        item.setPrice(price);
+        return item;
+    }
 
+    private CartItem cartItem(long itemId, int count) {
         CartItem cartItem = new CartItem();
-        cartItem.setItem(item);
-        cartItem.setCount(2);
-        cartItemRepository.save(cartItem);
-
-        CartResponse response = cartService.getCart();
-        assertThat(response.items()).hasSize(1);
-        assertThat(response.total()).isEqualTo(200L);
+        cartItem.setItemId(itemId);
+        cartItem.setCount(count);
+        return cartItem;
     }
 
     @Test
-    void updateCartItem_plusIncreasesCount() {
-        Item item = new Item();
-        item.setTitle("Item A");
-        item.setPrice(50L);
-        item = itemRepository.save(item);
+    @DisplayName("getCart — пустая корзина: пустой список и нулевая сумма")
+    void getCart_empty() {
+        StepVerifier.create(cartService.getCart())
+                .assertNext(response -> {
+                    assertThat(response.items()).isEmpty();
+                    assertThat(response.total()).isZero();
+                })
+                .verifyComplete();
+    }
 
+    @Test
+    @DisplayName("getCart — два товара: DTO содержат счётчики корзины, сумма корректна")
+    void getCart_withItems() {
+        Item milk = itemRepository.save(item("Молоко", 89L)).block();
+        Item bread = itemRepository.save(item("Хлеб", 45L)).block();
+        cartItemRepository.save(cartItem(milk.getId(), 2)).block();
+        cartItemRepository.save(cartItem(bread.getId(), 1)).block();
+
+        StepVerifier.create(cartService.getCart())
+                .assertNext(response -> {
+                    assertThat(response.items()).hasSize(2);
+                    assertThat(response.total()).isEqualTo(223L);
+
+                    ItemDto milkDto = response.items().stream()
+                            .filter(dto -> dto.id() == milk.getId())
+                            .findFirst()
+                            .orElseThrow();
+                    assertThat(milkDto.title()).isEqualTo("Молоко");
+                    assertThat(milkDto.price()).isEqualTo(89L);
+                    assertThat(milkDto.count()).isEqualTo(2);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("updateCartItem PLUS — счётчик увеличивается, ответ отражает новую корзину")
+    void updateCartItem_plus_increasesCount() {
+        Item milk = itemRepository.save(item("Молоко", 89L)).block();
+        cartItemRepository.save(cartItem(milk.getId(), 1)).block();
+
+        StepVerifier.create(cartService.updateCartItem(milk.getId(), ActionType.PLUS))
+                .assertNext(response -> {
+                    assertThat(response.items()).hasSize(1);
+                    assertThat(response.items().get(0).count()).isEqualTo(2);
+                    assertThat(response.total()).isEqualTo(178L);
+                })
+                .verifyComplete();
+
+        assertThat(cartItemRepository.findByItemId(milk.getId()).block().getCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("updateCartItem MINUS до нуля — позиция удаляется, корзина пустеет")
+    void updateCartItem_minusToZero_removesPosition() {
+        Item milk = itemRepository.save(item("Молоко", 89L)).block();
+        cartItemRepository.save(cartItem(milk.getId(), 1)).block();
+
+        StepVerifier.create(cartService.updateCartItem(milk.getId(), ActionType.MINUS))
+                .assertNext(response -> {
+                    assertThat(response.items()).isEmpty();
+                    assertThat(response.total()).isZero();
+                })
+                .verifyComplete();
+
+        assertThat(cartItemRepository.findByItemId(milk.getId()).block()).isNull();
+    }
+
+    @Test
+    @DisplayName("updateCartItem DELETE — позиция удаляется независимо от счётчика")
+    void updateCartItem_delete_removesPosition() {
+        Item milk = itemRepository.save(item("Молоко", 89L)).block();
+        cartItemRepository.save(cartItem(milk.getId(), 5)).block();
+
+        StepVerifier.create(cartService.updateCartItem(milk.getId(), ActionType.DELETE))
+                .assertNext(response -> assertThat(response.items()).isEmpty())
+                .verifyComplete();
+
+        assertThat(cartItemRepository.findByItemId(milk.getId()).block()).isNull();
+    }
+
+    @Test
+    @DisplayName("updateCartItem — товара нет в корзине: ItemNotFoundException")
+    void updateCartItem_missingCartEntry_throws() {
+        Item milk = itemRepository.save(item("Молоко", 89L)).block();
+
+        StepVerifier.create(cartService.updateCartItem(milk.getId(), ActionType.PLUS))
+                .expectError(ItemNotFoundException.class)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("processCartItemAction — граничные значения счётчика")
+    void processCartItemAction_boundaries() {
         CartItem cartItem = new CartItem();
-        cartItem.setItem(item);
-        cartItem.setCount(1);
-        cartItemRepository.save(cartItem);
+        cartItem.setCount(0);
 
-        CartResponse response = cartService.updateCartItem(item.getId(), ActionType.PLUS);
-        assertThat(response.items()).hasSize(1);
-        assertThat(response.items().getFirst().count()).isEqualTo(2);
-        assertThat(response.total()).isEqualTo(100L);
-    }
+        cartService.processCartItemAction(cartItem, ActionType.MINUS);
+        assertThat(cartItem.getCount()).isZero();
 
-    @Test
-    void updateCartItem_minusDecreasesCountAndRemovesWhenZero() {
-        Item item = new Item();
-        item.setTitle("Item B");
-        item.setPrice(30L);
-        item = itemRepository.save(item);
+        cartService.processCartItemAction(cartItem, ActionType.PLUS);
+        assertThat(cartItem.getCount()).isEqualTo(1);
 
-        CartItem cartItem = new CartItem();
-        cartItem.setItem(item);
-        cartItem.setCount(2);
-        cartItemRepository.saveAndFlush(cartItem);
-
-        CartResponse response = cartService.updateCartItem(item.getId(), ActionType.MINUS);
-        assertThat(response.items().getFirst().count()).isEqualTo(1);
-        assertThat(response.total()).isEqualTo(30L);
-
-        response = cartService.updateCartItem(item.getId(), ActionType.MINUS);
-        assertThat(response.items()).isEmpty();
-        assertThat(response.total()).isZero();
-        assertThat(cartItemRepository.findByItemId(item.getId())).isEmpty();
-    }
-
-    @Test
-    void updateCartItem_deleteRemovesItem() {
-        Item item = new Item();
-        item.setTitle("Item C");
-        item.setPrice(70L);
-        item = itemRepository.save(item);
-
-        CartItem cartItem = new CartItem();
-        cartItem.setItem(item);
-        cartItem.setCount(3);
-        cartItemRepository.save(cartItem);
-
-        CartResponse response = cartService.updateCartItem(item.getId(), ActionType.DELETE);
-        assertThat(response.items()).isEmpty();
-        assertThat(response.total()).isZero();
-        assertThat(cartItemRepository.findByItemId(item.getId())).isEmpty();
-    }
-
-    @Test
-    void updateCartItem_throwsWhenItemNotInCart() {
-        Item item = new Item();
-        item.setTitle("Nonexistent in cart");
-        item.setPrice(99L);
-        item = itemRepository.save(item);
-
-        final long id = item.getId();
-        assertThatThrownBy(() -> cartService.updateCartItem(id, ActionType.PLUS))
-                .isInstanceOf(ItemNotFoundException.class)
-                .hasMessageContaining("Товар не найден в корзине");
+        cartService.processCartItemAction(cartItem, ActionType.DELETE);
+        assertThat(cartItem.getCount()).isZero();
     }
 }
 

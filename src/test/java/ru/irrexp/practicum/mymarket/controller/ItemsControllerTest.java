@@ -1,144 +1,165 @@
 package ru.irrexp.practicum.mymarket.controller;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.thymeleaf.autoconfigure.ThymeleafAutoConfiguration;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 import ru.irrexp.practicum.mymarket.dto.ItemDto;
 import ru.irrexp.practicum.mymarket.dto.ItemsPageResponse;
 import ru.irrexp.practicum.mymarket.dto.PagingInfo;
 import ru.irrexp.practicum.mymarket.enums.ActionType;
 import ru.irrexp.practicum.mymarket.enums.SortType;
+import ru.irrexp.practicum.mymarket.exception.ItemNotFoundException;
 import ru.irrexp.practicum.mymarket.service.ItemService;
-import ru.irrexp.practicum.mymarket.service.OrderService;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
-@WebMvcTest({RootController.class, ItemsController.class})
+@WebFluxTest(ItemsController.class)
+@Import({ThymeleafAutoConfiguration.class, GlobalExceptionHandler.class})
 class ItemsControllerTest {
 
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @MockitoBean
-    private ItemService itemService;
+    private ItemService itemsService;
 
-    @MockitoBean
-    private OrderService orderService;
-
-    @Test
-    void updateFromList_redirectsWithEncodedSearchParam() throws Exception {
-        mockMvc.perform(post("/items")
-                                .param("id", "1")
-                                .param("search", "Review&pear+test")
-                                .param("sort", "ALPHA")
-                                .param("pageNumber", "1")
-                                .param("pageSize", "10")
-                                .param("action", "MINUS"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/items?search=Review%26pear%2Btest&sort=ALPHA&pageNumber=1&pageSize=10"));
-    }
-
-
-    @Test
-    void listItems_returnsViewWithPagingAndSearch() throws Exception {
-        ItemsPageResponse mockResponse = new ItemsPageResponse(
-                List.of(List.of()),
-                "test",
-                SortType.NO,
-                new PagingInfo(5, 1, false, false)
-        );
-        when(itemService.getItems("test", SortType.NO, 1, 5)).thenReturn(mockResponse);
-
-        mockMvc.perform(get("/items")
-                                .param("search", "test")
-                                .param("sort", "NO")
-                                .param("pageNumber", "1")
-                                .param("pageSize", "5"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attribute("items", mockResponse.items()))
-                .andExpect(model().attribute("search", "test"))
-                .andExpect(model().attribute("sort", SortType.NO))
-                .andExpect(model().attribute("paging", mockResponse.paging()));
+    private static ItemDto item(long id, String title, long price, int count) {
+        return new ItemDto(id, title, "Описание " + title, "/img/" + title + ".png", price, count);
     }
 
     @Test
-    void rootAndItemsList_shareSameLogic() throws Exception {
-        ItemsPageResponse mockResponse = new ItemsPageResponse(
-                List.of(List.of(new ItemDto(1L, "Товар", "Какой-то товар", "Картинка", 0L, 1))),
-                "",
-                SortType.PRICE,
-                new PagingInfo(10, 2, false, false)
-        );
-        when(itemService.getItems(null, SortType.PRICE, 2, 10)).thenReturn(mockResponse);
+    @DisplayName("GET /items — первая страница без поиска: 200 и товары в модели")
+    void getItems_firstPageNoSearch() {
+        List<ItemDto> items = List.of(item(1L, "Молоко", 89L, 0), item(2L, "Хлеб", 45L, 0));
+        when(itemsService.getItems(null, SortType.NO, 1, 5))
+                .thenReturn(Mono.just(new ItemsPageResponse(
+                        List.of(items), null, SortType.NO,
+                        new PagingInfo(5, 1, false, false))));
 
-        // Проверка /items
-        mockMvc.perform(get("/items")
-                                .param("sort", "PRICE")
-                                .param("pageNumber", "2")
-                                .param("pageSize", "10"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"));
+        webTestClient.get().uri("/items")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("Молоко"));
 
-        // Проверка корневого /
-        mockMvc.perform(get("/")
-                                .param("sort", "PRICE")
-                                .param("pageNumber", "2")
-                                .param("pageSize", "10"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"));
+        verify(itemsService).getItems(null, SortType.NO, 1, 5);
     }
 
     @Test
-    void getSingleItem_returnsDetailView() throws Exception {
-        ItemDto mockDto = new ItemDto(1L, "Test Phone", "Desc", "/static/test.png", 1000L, 0);
-        when(itemService.getItem(1L)).thenReturn(mockDto);
+    @DisplayName("GET /items — параметры поиска, сортировки и пагинации передаются в сервис")
+    void getItems_passesAllParamsToService() {
+        List<ItemDto> items = List.of(item(3L, "Молоко", 89L, 0));
+        when(itemsService.getItems("молоко", SortType.PRICE, 2, 3))
+                .thenReturn(Mono.just(new ItemsPageResponse(
+                        List.of(items), "молоко", SortType.PRICE,
+                        new PagingInfo(3, 2, true, false))));
 
-        mockMvc.perform(get("/items/1"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attribute("item", mockDto));
+        webTestClient.get()
+                .uri(b -> b.path("/items")
+                        .queryParam("search", "молоко")
+                        .queryParam("sort", "PRICE")
+                        .queryParam("pageNumber", 2)
+                        .queryParam("pageSize", 3)
+                        .build())
+                .exchange()
+                .expectStatus().isOk();
+
+        verify(itemsService).getItems("молоко", SortType.PRICE, 2, 3);
     }
 
     @Test
-    void updateFromDetailPage_returnsDetailViewWithUpdatedDto() throws Exception {
-        ItemDto mockDto = new ItemDto(2L, "Updated Phone", "New desc", "/static/upd.png", 2000L, 3);
-        when(itemService.updateCartFromItemPage(2L, ActionType.PLUS)).thenReturn(mockDto);
+    @DisplayName("GET /items/{id} — существующий товар: страница товара с 200")
+    void getItem_existingItem() {
+        when(itemsService.getItem(1L)).thenReturn(Mono.just(item(1L, "Молоко", 89L, 0)));
 
-        mockMvc.perform(post("/items/2")
-                                .param("action", "PLUS"))
-                .andExpect(status().is3xxRedirection());
+        webTestClient.get().uri("/items/1")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(body -> assertThat(body).contains("Молоко"));
+
+        verify(itemsService).getItem(1L);
     }
 
     @Test
-    void updateFromList_redirectsToItemsWithParams() throws Exception {
-        doNothing().when(itemService).updateCart(1L, "phone", SortType.ALPHA, 1, 10, ActionType.MINUS);
+    @DisplayName("GET /items/{id} — несуществующий товар: 404 с сообщением об ошибке")
+    void getItem_missingItem_returns404() {
+        when(itemsService.getItem(42L))
+                .thenReturn(Mono.error(new ItemNotFoundException("Товар не найден")));
 
-        MvcResult result = mockMvc.perform(post("/items")
-                                                   .param("id", "1")
-                                                   .param("search", "phone")
-                                                   .param("sort", "ALPHA")
-                                                   .param("pageNumber", "1")
-                                                   .param("pageSize", "10")
-                                                   .param("action", "MINUS"))
-                .andExpect(status().is3xxRedirection())
-                .andReturn();
+        webTestClient.get().uri("/items/42")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.message").isEqualTo("Товар не найден");
+    }
 
-        String redirectUrl = result.getResponse().getRedirectedUrl();
-        assertThat(redirectUrl).isEqualTo("/items?search=phone&sort=ALPHA&pageNumber=1&pageSize=10");
+    @Test
+    @DisplayName("POST /items — с search: редирект сохраняет все параметры")
+    void updateCart_withSearch_redirectsWithAllParams() {
+        when(itemsService.updateCart(1L, ActionType.PLUS)).thenReturn(Mono.empty());
+
+        webTestClient.post()
+                .uri(b -> b.path("/items")
+                        .queryParam("id", 1)
+                        .queryParam("search", "milk")
+                        .queryParam("sort", "PRICE")
+                        .queryParam("pageNumber", 2)
+                        .queryParam("pageSize", 3)
+                        .queryParam("action", "PLUS")
+                        .build())
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().valueEquals("Location", "/items?search=milk&sort=PRICE&pageNumber=2&pageSize=3");
+
+        verify(itemsService).updateCart(1L, ActionType.PLUS);
+    }
+
+    @Test
+    @DisplayName("POST /items — без search: редирект без параметра search")
+    void updateCart_withoutSearch_redirectsWithoutSearch() {
+        when(itemsService.updateCart(1L, ActionType.MINUS)).thenReturn(Mono.empty());
+
+        webTestClient.post()
+                .uri(b -> b.path("/items")
+                        .queryParam("id", 1)
+                        .queryParam("sort", "NO")
+                        .queryParam("pageNumber", 1)
+                        .queryParam("pageSize", 5)
+                        .queryParam("action", "MINUS")
+                        .build())
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().valueEquals("Location", "/items?sort=NO&pageNumber=1&pageSize=5");
+    }
+
+    @Test
+    @DisplayName("POST /items/{id} — редирект на страницу этого товара")
+    void updateCartFromItemPage_redirectsToItemPage() {
+        when(itemsService.updateCart(1L, ActionType.PLUS)).thenReturn(Mono.empty());
+
+        webTestClient.post()
+                .uri(b -> b.path("/items/1")
+                        .queryParam("action", "PLUS")
+                        .build())
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().valueEquals("Location", "/items/1");
+
+        verify(itemsService).updateCart(1L, ActionType.PLUS);
     }
 }
 
